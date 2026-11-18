@@ -141,9 +141,13 @@ dialog::backdrop{background:rgba(30,12,20,.55)}
 .pininput{width:100%;height:52px;border-radius:14px;border:2px solid var(–line);background:var(–bg);color:var(–ink);padding:0 14px;font:inherit;font-size:22px;letter-spacing:.4em}
 .pininput:focus,.field input:focus{outline:3px solid var(–accent);border-color:transparent}
 .modes{display:grid;gap:10px}
-.mode{display:block;width:100%;text-align:left;padding:14px 16px;border-radius:18px;border:3px solid var(–line);background:var(–bg);font-size:17px;font-weight:700}
+.mode{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:18px;border:3px solid var(–line);background:var(–bg);font-size:17px;font-weight:700;cursor:pointer}
+.mode input{flex:none;width:28px;height:28px;margin:0;accent-color:var(–accent)}
 .mode small{display:block;margin-top:2px;font-size:14px;font-weight:500;color:var(–soft)}
-.mode[aria-pressed=true]{border-color:var(–accent);background:color-mix(in srgb,var(–accent) 12%,var(–card))}
+.mode.on{border-color:var(–accent);background:color-mix(in srgb,var(–accent) 12%,var(–card))}
+.pinbox{display:flex;gap:12px}
+.pinbox input{width:64px;height:68px;padding:0;text-align:center;font:inherit;font-size:30px;font-weight:800;border-radius:16px;border:2px solid var(–line);background:var(–bg);color:var(–ink)}
+.pinbox input:focus{outline:3px solid var(–accent);border-color:transparent}
 .field{display:grid;grid-template-columns:58px 1fr;gap:8px;align-items:center;margin-bottom:10px}
 .field label{font-size:16px;font-weight:700}
 .field input{width:100%;height:46px;border-radius:14px;border:2px solid var(–line);background:var(–bg);color:var(–ink);padding:0 12px;font:inherit;font-size:14px}
@@ -246,15 +250,18 @@ dialog::backdrop{background:rgba(30,12,20,.55)}
     <section class="pane" data-pane="lock">
       <p class="hint">엄마 아빠만 설정에 들어올 수 있게 두 자리 숫자 암호를 걸어요.</p>
       <label class="rowsw"><input type="checkbox" id="pinOn"> 잠금 사용</label>
-      <input class="pininput" id="pinVal" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-label="두 자리 암호">
+      <div class="pinbox">
+        <input id="pin1" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" aria-label="암호 첫째 자리">
+        <input id="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" aria-label="암호 둘째 자리">
+      </div>
       <p class="hint" id="pinState" style="margin-top:10px"></p>
       <p class="hint">암호를 잊으면 이 사이트의 저장 데이터를 지워야 다시 열 수 있어요.</p>
     </section>
     <section class="pane" data-pane="play" hidden>
       <p class="hint">한 편이 끝났을 때 어떻게 할까요?</p>
       <div class="modes">
-        <button class="mode" data-auto="0">한 편만 보기<small>끝나면 멈추고 "다 봤어요!"가 떠요</small></button>
-        <button class="mode" data-auto="1">연속 재생<small>끝나면 다음 편이 저절로 나와요</small></button>
+        <label class="mode"><input type="radio" name="playmode" value="0"><span>한 편만 보기<small>끝나면 멈추고 "다 봤어요!"가 떠요</small></span></label>
+        <label class="mode"><input type="radio" name="playmode" value="1"><span>연속 재생<small>끝나면 다음 편이 저절로 나와요</small></span></label>
       </div>
       <button class="ghost" id="clearSeen">본 기록 지우기</button>
     </section>
@@ -608,9 +615,20 @@ function showTab(t){
 }
 document.querySelectorAll('.tabbtn').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 function drawMode(){
-  document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', (b.dataset.auto === '1') === tmpAuto));
+  document.querySelectorAll('.mode').forEach(l => {
+    const r = l.querySelector('input'), on = (r.value === '1') === tmpAuto;
+    r.checked = on; l.classList.toggle('on', on);
+  });
 }
-document.querySelectorAll('.mode').forEach(b => b.onclick = () => { tmpAuto = b.dataset.auto === '1'; drawMode(); });
+document.querySelectorAll('.mode input').forEach(r => r.onchange = () => { tmpAuto = r.value === '1'; drawMode(); });
+
+/* 암호 칸 2개: 한 칸 채우면 다음 칸으로 */
+const pin1 = $('pin1'), pin2 = $('pin2');
+function oneDigit(el){ el.value = el.value.replace(/\D/g,'').slice(-1); }
+pin1.oninput = () => { oneDigit(pin1); if (pin1.value) pin2.focus(); };
+pin2.oninput = () => oneDigit(pin2);
+pin2.onkeydown = e => { if (e.key === 'Backspace' && !pin2.value){ e.preventDefault(); pin1.value = ''; pin1.focus(); } };
+[pin1, pin2].forEach(el => el.onfocus = () => el.select());
 
 function buildFields(){
   const box = $('fields'); box.innerHTML = '';
@@ -626,9 +644,8 @@ function buildFields(){
 function openSettings(focusSeason){
   buildFields();
   const pin = getPin();
-  $('pinOn').checked = !!pin; $('pinVal').value = '';
-  $('pinVal').placeholder = pin ? '바꾸려면 새 숫자 2개' : '숫자 2개';
-  $('pinState').textContent = pin ? '지금 잠금을 쓰고 있어요.' : '지금은 잠금이 없어요.';
+  $('pinOn').checked = !!pin; pin1.value = ''; pin2.value = '';
+  $('pinState').textContent = pin ? '지금 잠금을 쓰고 있어요. 바꾸려면 새 숫자 2개를 넣어 주세요.' : '지금은 잠금이 없어요. 숫자 2개를 넣고 저장하면 잠겨요.';
   tmpAuto = isAuto(); drawMode();
   dlg.showModal();
   showTab(focusSeason ? 'links' : 'lock');
@@ -649,7 +666,7 @@ $('clearSeen').onclick = () => {
 };
 $('saveSettings').onclick = () => {
   /* 1) 암호 */
-  const on = $('pinOn').checked, v = $('pinVal').value.trim();
+  const on = $('pinOn').checked, v = pin1.value + pin2.value;
   if (on){
     if (v && !/^\d{2}$/.test(v)) return setMsg('암호는 숫자 2자리로 써 주세요', 'lock');
     if (!v && !getPin()) return setMsg('잠금을 쓰려면 숫자 2자리를 입력해 주세요', 'lock');
